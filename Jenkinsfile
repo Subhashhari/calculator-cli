@@ -2,28 +2,37 @@ pipeline {
     agent any
 
     environment {
-        // UPDATE THESE TWO LINES
         DOCKER_HUB_USER = 'subhashh2005' 
         TAG = 'IMT2023104' 
-        
         APP_NAME = 'calculator-app'
         FULL_IMAGE_NAME = "${DOCKER_HUB_USER}/${APP_NAME}:${TAG}"
+        DOCKER_CREDS_ID = 'dockerhub-login'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                // UPDATE THIS URL
                 git branch: 'main', url: 'https://github.com/Subhashhari/calculator-cli'
             }
         }
 
-        stage('Build & Test') {
+        stage('Setup Venv & Test') {
             steps {
                 script {
-                    echo 'Building and Testing...'
-                    bat "docker build -t test-calc-image ."
-                    bat "docker run --rm test-calc-image python test_app.py"
+                    echo ' Creating Virtual Environment...'
+                    bat "python -m venv .venv"
+                    
+                    echo ' Running Tests in Venv...'
+                    bat ".venv\\Scripts\\python.exe test_app.py"
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo 'Tests passed locally. Building Docker Image...'
+                    bat "docker build -t %FULL_IMAGE_NAME% ."
                 }
             }
         }
@@ -31,11 +40,9 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    echo 'Pushing...'
-                    // This uses the ID "dockerhub-login" you created in Step A
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-login', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                    echo 'Pushing to Docker Hub...'
+                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDS_ID, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         bat "docker login -u %USER% -p %PASS%"
-                        bat "docker tag test-calc-image %FULL_IMAGE_NAME%"
                         bat "docker push %FULL_IMAGE_NAME%"
                     }
                 }
@@ -45,7 +52,11 @@ pipeline {
     
     post {
         always {
-            bat "docker rmi test-calc-image"
+            script {
+                echo 'Cleaning up...'
+                bat "docker rmi %FULL_IMAGE_NAME%"
+                bat "rmdir /s /q .venv"
+            }
         }
     }
 }
