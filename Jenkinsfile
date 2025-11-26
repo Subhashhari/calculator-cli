@@ -50,12 +50,21 @@ pipeline {
         }
     }
     
-    post {
+   post {
         always {
             script {
                 echo 'Cleaning up...'
-                bat "docker rmi %FULL_IMAGE_NAME%"
-                bat "rmdir /s /q .venv"
+                try {
+                    bat "rmdir /s /q .venv"
+                } catch (Exception e) {
+                    echo "Could not delete .venv (maybe it is already gone)"
+                }
+
+                try {
+                    bat "docker rmi %FULL_IMAGE_NAME%"
+                } catch (Exception e) {
+                    echo "Docker image was not found locally to delete. It might have been handled by BuildKit. Ignoring."
+                }
             }
         }
     }
